@@ -33,8 +33,9 @@ import (
 )
 
 type Executor struct {
-	Client *api.Client
-	Mount  string
+	Client         *api.Client
+	Mount          string
+	DefaultEnabled bool
 
 	Config map[string]interface{}
 
@@ -45,19 +46,90 @@ type Executor struct {
 
 func NewExecutor(client *api.Client, mount string) *Executor {
 	return &Executor{
-		Client:    client,
-		Mount:     mount,
-		Config:    make(map[string]interface{}),
-		Resources: make(map[string]map[logical.Operation]*PathFetch),
+		Client:         client,
+		DefaultEnabled: true,
+		Mount:          mount,
+		Config:         make(map[string]interface{}),
+		Resources:      make(map[string]map[logical.Operation]*PathFetch),
 	}
 }
 
 func (e *Executor) AddCheck(c Check) {
-    e.Checkers = append(e.Checkers, c)
+	e.Checkers = append(e.Checkers, c)
+}
+
+func (e *Executor) BuildConfig(external map[string]interface{}) error {
+	merged := e.Config
+
+	for index, checker := range e.Checkers {
+		name := checker.Name()
+		if _, present := merged[name]; name == "" || present {
+			return fmt.Errorf("bad checker %v: name is empty or already present: %v", index, name)
+		}
+
+		// Fetch the default configuration; if the check returns enabled
+		// status, verify it matches our expectations (in the event it should
+		// be disabled by default), otherwise, add it in.
+		config := checker.DefaultConfig()
+		enabled, present := config["enabled"]
+		if !present {
+			config["enabled"] = e.DefaultEnabled
+		} else if enabled.(bool) && !e.DefaultEnabled {
+			config["enabled"] = e.DefaultEnabled
+		}
+
+		// Now apply any external config for this check.
+		if econfig, present := external[name]; present {
+			for param, evalue := range econfig.(map[string]interface{}) {
+				if _, ok := config[param]; !ok {
+					// Assumption: default configs have all possible
+					// configuration options. This external config has
+					// an unknown option, so we want to error out.
+					return fmt.Errorf("unknown configuration option for %v: %v", name, param)
+				}
+
+				config[param] = evalue
+			}
+		}
+
+		// Now apply it and save it.
+		if err := checker.LoadConfig(config); err != nil {
+			return fmt.Errorf("error saving merged config for %v: %w", name, err)
+		}
+		merged[name] = config
+	}
+
+	return nil
+}
+
+func (e *Executor) Execute() (map[string][]*Result, error) {
+	ret := make(map[string][]*Result)
+	for _, checker := range e.Checkers {
+		if err := checker.FetchResources(e); err != nil {
+			return nil, err
+		}
+
+		results, err := checker.Evaluate(e)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, result := range results {
+			result.Endpoint = e.templatePath(result.Endpoint)
+		}
+
+		ret[checker.Name()] = results
+	}
+
+	return ret, nil
+}
+
+func (e *Executor) templatePath(path string) string {
+	return strings.ReplaceAll(path, "{{mount}}", e.Mount)
 }
 
 func (e *Executor) FetchIfNotFetched(op logical.Operation, rawPath string) (*PathFetch, error) {
-	path := strings.ReplaceAll(rawPath, "{{mount}}", e.Mount)
+	path := e.templatePath(rawPath)
 
 	byOp, present := e.Resources[path]
 	if present && byOp != nil {
@@ -113,7 +185,7 @@ type Check interface {
 
 	FetchResources(e *Executor) error
 
-	Evaluate(e *Executor) ([]Result, error)
+	Evaluate(e *Executor) ([]*Result, error)
 }
 
 type ResultStatus int
