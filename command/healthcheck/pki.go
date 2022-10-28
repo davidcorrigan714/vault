@@ -4,6 +4,10 @@ type CAValidityPeriod struct {
 
 }
 
+func (h *CAValidityPeriod) Name() string {
+	return "ca_validity_period"
+}
+
 func (h *CAValidityPeriod) DefaultConfig() map[string]interface{} {
 	return map[string]interface{}{
 		"root_expiry_critical": "30d",
