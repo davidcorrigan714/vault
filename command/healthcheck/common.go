@@ -29,10 +29,9 @@ import (
 )
 
 type Executor struct {
-    Config map[string]interface{}
-    Resources map[string]map[logical.Operation]PathFetch
-
-    Checkers []Check
+	Config    map[string]interface{}
+	Resources map[string]map[logical.Operation]PathFetch
+	Checkers  []Check
 }
 
 type PathFetch struct {
@@ -47,18 +46,50 @@ func (p *PathFetch) Execute(e Executor) error {
 }
 
 type Check interface {
-    Name() string
+	Name() string
 
-    DefaultConfig() map[string]interface{}
-    LoadConfig(config map[string]interface{}) error
+	DefaultConfig() map[string]interface{}
+	LoadConfig(config map[string]interface{}) error
 
 	FetchResources(e Executor) error
 
 	Evaluate(e Executor) ([]Result, error)
 }
 
+type ResultStatus int
+
+const (
+	ResultNotApplicable ResultStatus = iota
+	ResultOK
+	ResultInformational
+	ResultWarning
+	ResultCritical
+	ResultInvalidVersion
+	ResultInsufficientPermissions
+)
+
+var ResultStatusNameMap = map[ResultStatus]string{
+	ResultNotApplicable:           "not_applicable",
+	ResultOK:                      "ok",
+	ResultInformational:           "informational",
+	ResultWarning:                 "warning",
+	ResultCritical:                "critical",
+	ResultInvalidVersion:          "invalid_version",
+	ResultInsufficientPermissions: "insufficient_permissions",
+}
+
+var NameResultStatusMap = map[string]ResultStatus{
+	"not_applicable":           ResultNotApplicable,
+	"ok":                       ResultOK,
+	"informational":            ResultInformational,
+	"warning":                  ResultWarning,
+	"critical":                 ResultCritical,
+	"invalid_version":          ResultInvalidVersion,
+	"insufficient_permissions": ResultInsufficientPermissions,
+}
+
 type Result struct {
-    Status ResultStatus `json:"status"`
-    Endpoint string `json:"endpoint,omitempty"`
-    Message string `json:"message,omitempty"`
+	Status   ResultStatus `json:"status"`
+	Endpoint string       `json:"endpoint,omitempty"`
+	Message  string       `json:"message,omitempty"`
 }
