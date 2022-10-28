@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hashicorp/vault/command/healthcheck"
+
 	"github.com/mitchellh/cli"
 	"github.com/posener/complete"
 )
@@ -163,7 +165,15 @@ func (c *PKIHealthCheckCommand) Run(args []string) int {
 		return pkiRetUsage
 	}
 
-	// mount := sanitizePath(args[0])
+	client, err := c.Client()
+	if err != nil {
+		c.UI.Error(err.Error())
+		return pkiRetUsage
+	}
+	mount := sanitizePath(args[0])
+
+	executor := healthcheck.NewExecutor(client, mount)
+	executor.AddCheck(&healthcheck.CAValidityPeriod{})
 
 	return 0
 }
