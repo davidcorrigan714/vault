@@ -52,6 +52,10 @@ func NewExecutor(client *api.Client, mount string) *Executor {
 	}
 }
 
+func (e *Executor) AddCheck(c Check) {
+    e.Checkers = append(e.Checkers, c)
+}
+
 func (e *Executor) FetchIfNotFetched(op logical.Operation, rawPath string) (*PathFetch, error) {
 	path := strings.ReplaceAll(rawPath, "{{mount}}", e.Mount)
 
@@ -75,14 +79,14 @@ func (e *Executor) FetchIfNotFetched(op logical.Operation, rawPath string) (*Pat
 	}
 
 	if op == logical.ListOperation {
-		response, err := client.Logical().List(path)
+		response, err := e.Client.Logical().List(path)
 		if err != nil {
 			return nil, fmt.Errorf("error fetching LIST %v: %w", path, err)
 		}
 
 		ret.Response = response
 	} else if op == logical.ReadOperation {
-		response, err := client.Logical().Read(path)
+		response, err := e.Client.Logical().Read(path)
 		if err != nil {
 			return nil, fmt.Errorf("error fetching READ %v: %w", path, err)
 		}
@@ -109,7 +113,7 @@ type Check interface {
 
 	FetchResources(e *Executor) error
 
-	Evaluate(e Executor) ([]Result, error)
+	Evaluate(e *Executor) ([]Result, error)
 }
 
 type ResultStatus int
