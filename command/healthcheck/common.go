@@ -25,24 +25,80 @@
 package healthcheck
 
 import (
+	"fmt"
+	"strings"
+
+	"github.com/hashicorp/vault/api"
 	"github.com/hashicorp/vault/sdk/logical"
 )
 
 type Executor struct {
-	Config    map[string]interface{}
-	Resources map[string]map[logical.Operation]PathFetch
-	Checkers  []Check
+	Client *api.Client
+	Mount  string
+
+	Config map[string]interface{}
+
+	Resources map[string]map[logical.Operation]*PathFetch
+
+	Checkers []Check
+}
+
+func NewExecutor(client *api.Client, mount string) *Executor {
+	return &Executor{
+		Client:    client,
+		Mount:     mount,
+		Config:    make(map[string]interface{}),
+		Resources: make(map[string]map[logical.Operation]*PathFetch),
+	}
+}
+
+func (e *Executor) FetchIfNotFetched(op logical.Operation, rawPath string) (*PathFetch, error) {
+	path := strings.ReplaceAll(rawPath, "{{mount}}", e.Mount)
+
+	byOp, present := e.Resources[path]
+	if present && byOp != nil {
+		result, present := byOp[op]
+		if present && result != nil {
+			return result, nil
+		}
+	}
+
+	// Must not exist in cache; create it.
+	if byOp == nil {
+		e.Resources[path] = make(map[logical.Operation]*PathFetch)
+	}
+
+	ret := &PathFetch{
+		Operation:   op,
+		Path:        path,
+		ParsedCache: make(map[string]interface{}),
+	}
+
+	if op == logical.ListOperation {
+		response, err := client.Logical().List(path)
+		if err != nil {
+			return nil, fmt.Errorf("error fetching LIST %v: %w", path, err)
+		}
+
+		ret.Response = response
+	} else if op == logical.ReadOperation {
+		response, err := client.Logical().Read(path)
+		if err != nil {
+			return nil, fmt.Errorf("error fetching READ %v: %w", path, err)
+		}
+
+		ret.Response = response
+	}
+
+	e.Resources[path][op] = ret
+	return ret, nil
 }
 
 type PathFetch struct {
-	Operation      logical.Operation
-	Path           string
-	RawResponse    []byte
-	ParsedRespones interface{}
-}
-
-func (p *PathFetch) Execute(e Executor) error {
-	return nil
+	Operation   logical.Operation
+	Path        string
+	Response    *api.Secret
+	ParsedCache map[string]interface{}
 }
 
 type Check interface {
@@ -51,7 +107,7 @@ type Check interface {
 	DefaultConfig() map[string]interface{}
 	LoadConfig(config map[string]interface{}) error
 
-	FetchResources(e Executor) error
+	FetchResources(e *Executor) error
 
 	Evaluate(e Executor) ([]Result, error)
 }
