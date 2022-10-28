@@ -28,8 +28,11 @@ import (
 	"github.com/hashicorp/vault/sdk/logical"
 )
 
-type Executor interface {
+type Executor struct {
+    Config map[string]interface{}
+    Resources map[string]map[logical.Operation]PathFetch
 
+    Checkers []Check
 }
 
 type PathFetch struct {
@@ -49,8 +52,7 @@ type Check interface {
     DefaultConfig() map[string]interface{}
     LoadConfig(config map[string]interface{}) error
 
-	StaticPaths() []string
-	DynamicPaths(e Executor) ([]PathFetch, error)
+	FetchResources(e Executor) error
 
 	Evaluate(e Executor) ([]Result, error)
 }
