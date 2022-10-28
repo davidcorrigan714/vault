@@ -14,6 +14,13 @@ type CAValidityPeriod struct {
 	IntermediateExpieries map[ResultStatus]time.Duration
 }
 
+func NewCAValidityPeriodCheck() Check {
+	return &CAValidityPeriod{
+		RootExpiries: make(map[ResultStatus]time.Duration, 3),
+    	IntermediateExpieries: make(map[ResultStatus]time.Duration, 3),
+	}
+}
+
 func (h *CAValidityPeriod) Name() string {
 	return "ca_validity_period"
 }
@@ -78,25 +85,29 @@ func (h *CAValidityPeriod) LoadConfig(config map[string]interface{}) error {
 
 func (h *CAValidityPeriod) FetchResources(e *Executor) error {
 	// Check if the issuer is fetched yet.
-	issuersRet, err := e.FetchIfNotFetch(logical.ListOperation, "/{{mount}}/issuers")
+	issuersRet, err := e.FetchIfNotFetched(logical.ListOperation, "/{{mount}}/issuers")
 	if err != nil {
 		return err
 	}
 
 	if len(issuersRet.ParsedCache) == 0 {
 		var issuers []string
-		for _, rawIssuerId := range issuersRet.Response.Data["keys"] {
+		for _, rawIssuerId := range issuersRet.Response.Data["keys"].([]interface{}) {
 			issuers = append(issuers, rawIssuerId.(string))
 		}
 		issuersRet.ParsedCache["issuers"] = issuers
 	}
 
 	for _, issuer := range issuersRet.ParsedCache["issuers"].([]string) {
-		_, err = e.FetchIfNotFetch(logical.ReadOperation, "/{{mount}}/issuer/"+issuer)
+		_, err = e.FetchIfNotFetched(logical.ReadOperation, "/{{mount}}/issuer/"+issuer)
 		if err != nil {
 			return err
 		}
 	}
 
 	return nil
+}
+
+func (h *CAValidityPeriod) Evaluate(e *Executor) ([]Result, error) {
+	return nil, nil
 }
