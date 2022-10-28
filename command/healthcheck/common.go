@@ -22,13 +22,15 @@
  * impact.
  */
 
- package healthcheck
+package healthcheck
 
 import (
 	"github.com/hashicorp/vault/sdk/logical"
 )
 
-type Executor struct {}
+type Executor interface {
+
+}
 
 type PathFetch struct {
 	Operation      logical.Operation
@@ -42,10 +44,19 @@ func (p *PathFetch) Execute(e Executor) error {
 }
 
 type Check interface {
+    Name() string
+
     DefaultConfig() map[string]interface{}
     LoadConfig(config map[string]interface{}) error
 
 	StaticPaths() []string
 	DynamicPaths(e Executor) ([]PathFetch, error)
-	Evaluate(e Executor)
+
+	Evaluate(e Executor) ([]Result, error)
+}
+
+type Result struct {
+    Status ResultStatus `json:"status"`
+    Endpoint string `json:"endpoint,omitempty"`
+    Message string `json:"message,omitempty"`
 }
