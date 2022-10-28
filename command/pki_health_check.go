@@ -173,7 +173,37 @@ func (c *PKIHealthCheckCommand) Run(args []string) int {
 	mount := sanitizePath(args[0])
 
 	executor := healthcheck.NewExecutor(client, mount)
-	executor.AddCheck(&healthcheck.CAValidityPeriod{})
+	executor.AddCheck(healthcheck.NewCAValidityPeriodCheck())
+	if c.flagDefaultDisabled {
+		executor.DefaultEnabled = false
+	}
 
-	return 0
+	external_config := make(map[string]interface{})
+	if c.flagConfig != "" {
+		// Load the external configuration
+	}
+
+	if err := executor.BuildConfig(external_config); err != nil {
+		c.UI.Error(fmt.Sprintf("Failed to build health check configuration: %v", err))
+		return pkiRetUsage
+	}
+
+	results, err := executor.Execute()
+	if err != nil {
+		c.UI.Error(fmt.Sprintf("Failed to run health check: %v", err))
+		return pkiRetUsage
+	}
+
+	for scanner, findings := range results {
+		c.UI.Output(scanner)
+		c.UI.Output("---")
+		c.UI.Output("status endpoint message")
+		c.UI.Output("------ -------- -------")
+		for _, finding := range findings {
+			c.UI.Output(fmt.Sprintf("%v %v %v", healthcheck.ResultStatusNameMap[finding.Status], finding.Endpoint, finding.Message))
+		}
+		c.UI.Output("\n")
+	}
+
+	return pkiRetOK
 }
