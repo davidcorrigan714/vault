@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/hashicorp/vault/sdk/logical"
 )
 
 type CAValidityPeriod struct {
@@ -70,6 +72,31 @@ func (h *CAValidityPeriod) LoadConfig(config map[string]interface{}) error {
 	}
 
 	h.Enabled = config["enabled"].(bool)
+
+	return nil
+}
+
+func (h *CAValidityPeriod) FetchResources(e *Executor) error {
+	// Check if the issuer is fetched yet.
+	issuersRet, err := e.FetchIfNotFetch(logical.ListOperation, "/{{mount}}/issuers")
+	if err != nil {
+		return err
+	}
+
+	if len(issuersRet.ParsedCache) == 0 {
+		var issuers []string
+		for _, rawIssuerId := range issuersRet.Response.Data["keys"] {
+			issuers = append(issuers, rawIssuerId.(string))
+		}
+		issuersRet.ParsedCache["issuers"] = issuers
+	}
+
+	for _, issuer := range issuersRet.ParsedCache["issuers"].([]string) {
+		_, err = e.FetchIfNotFetch(logical.ReadOperation, "/{{mount}}/issuer/"+issuer)
+		if err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
