@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	pkiRetOK            int = iota
+	pkiRetOK int = iota
 	pkiRetUsage
 	pkiRetInformational
 	pkiRetWarning
@@ -33,10 +33,10 @@ var (
 type PKIHealthCheckCommand struct {
 	*BaseCommand
 
-	flagConfig string
+	flagConfig          string
 	flagReturnIndicator string
 	flagDefaultDisabled bool
-	flagList bool
+	flagList            bool
 }
 
 func (c *PKIHealthCheckCommand) Synopsis() string {
@@ -94,7 +94,7 @@ func (c *PKIHealthCheckCommand) Flags() *FlagSets {
 		Target:  &c.flagReturnIndicator,
 		Default: "default",
 		EnvVar:  "",
-		Usage:   `Behavior of the return value:
+		Usage: `Behavior of the return value:
  - permission, for exiting with a non-zero code when the tool lacks
                permissions or has a version mismatch with the server;
  - critical, for exiting with a non-zero code when a check returns a
